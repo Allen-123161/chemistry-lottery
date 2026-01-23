@@ -647,7 +647,12 @@
             "“红”运当头 小组10元红包碎片(1/2)",
             "取长补短 最高分-200，最低分+200"
         ];
-        
+
+        // 伪随机抽奖核心：冷却池机制
+        let availablePool = [...magicEntries]; // 可用池
+        let coolDownPool = []; // 冷却池（格式：{entry: 条目内容, coolRound: 剩余冷却轮数}）
+        let drawCount = 0; // 累计抽奖次数
+
         // 初始化音频播放（核心修复）
         function initAudio() {
             const bgMusic = document.getElementById('bgMusic');
@@ -702,8 +707,8 @@
                 
                 // 随机结果延迟
                 setTimeout(() => {
-                    // 执行抽奖
-                    const winner = drawWinner(magicEntries);
+                    // 执行抽奖（伪随机版）
+                    const winner = drawWinnerWithCoolDown();
                     
                     // 分割结果文本
                     const spaceIndex = winner.indexOf(' ');
@@ -744,10 +749,45 @@
                 }, 2000);
             });
             
-            // 抽奖函数
-            function drawWinner(entries) {
-                const randomIndex = Math.floor(Math.random() * entries.length);
-                return entries[randomIndex];
+            // 伪随机抽奖函数（带7轮冷却）
+            function drawWinnerWithCoolDown() {
+                drawCount++; // 累计抽奖次数+1
+                
+                // 1. 冷却池轮数递减，释放冷却完成的条目回可用池
+                coolDownPool = coolDownPool.map(item => {
+                    return {
+                        entry: item.entry,
+                        coolRound: item.coolRound - 1
+                    };
+                }).filter(item => {
+                    // 冷却轮数≤0则释放回可用池
+                    if (item.coolRound <= 0) {
+                        availablePool.push(item.entry);
+                        return false;
+                    }
+                    return true;
+                });
+                
+                // 2. 极端情况：可用池为空时，强制释放所有冷却池条目
+                if (availablePool.length === 0) {
+                    availablePool = coolDownPool.map(item => item.entry);
+                    coolDownPool = [];
+                }
+                
+                // 3. 从可用池随机抽取
+                const randomIndex = Math.floor(Math.random() * availablePool.length);
+                const winner = availablePool[randomIndex];
+                
+                // 4. 将抽中的条目移入冷却池（7轮冷却）
+                coolDownPool.push({
+                    entry: winner,
+                    coolRound: 7
+                });
+                
+                // 5. 从可用池移除该条目
+                availablePool.splice(randomIndex, 1);
+                
+                return winner;
             }
             
             // 显示结果函数（两行显示）
